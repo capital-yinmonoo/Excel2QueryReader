@@ -17,6 +17,7 @@ namespace Excel_Reader
     {
         public Form1()
         {
+
             InitializeComponent();
             dtRight = new DataTable();
             dtRight.Columns.Add("No");
