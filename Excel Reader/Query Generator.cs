@@ -36,7 +36,9 @@ namespace Excel_Reader
                 CheckPathExists = true,
 
                 DefaultExt = "xls",
-                Filter = "Excel files (*.xls)|*.xls",
+                Filter = "Excel Files|*.xls;*.xlsx",
+
+           // Filter = "Excel files (*.xls)|*.xls",
                 FilterIndex = 2,
                 //RestoreDirectory = true, 
                 //ReadOnlyChecked = true,
@@ -142,7 +144,7 @@ namespace Excel_Reader
         private string ExtendedQuery(string tableName)
         {
             string execute =Environment.NewLine+ " EXEC sys.sp_addextendedproperty" + Environment.NewLine +
-                "@name = N'Obic7fxVersion',@value = N'1.0.20220419.1',@level0type = N'SCHEMA'," + Environment.NewLine +
+                "@name = N'CapiTalKnowleDge',@value = N'1.0.20220419.1',@level0type = N'SCHEMA'," + Environment.NewLine +
              "@level0name = N'dbo',@level1type = N'TABLE',@level1name = N'" + tableName + "'" + Environment.NewLine +
              "GO";
             return execute;
@@ -181,13 +183,15 @@ namespace Excel_Reader
         }
         public DataTable ReadExcel(string fileName, string fileExt, bool IsList = false, string tbName=null)
         {
-
+            //var dtx=READExcel(textBox1.Text);
             string conn = string.Empty;
             DataTable dtexcel = new DataTable();
-            if (fileExt.CompareTo(".xls") == 0)
-                conn = @"provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + fileName + ";Extended Properties='Excel 8.0;HRD=Yes;IMEX=1';"; //for below excel 2007  
-            else
-                conn = @"Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + fileName + ";Extended Properties='Excel 12.0;HDR=NO';"; //for above excel 2007  
+            if (Path.GetExtension(textBox1.Text).CompareTo(".xls") == 0) 
+                 //conn = @"Provider=Microsoft.Jet.OLEDB.4.0; Data Source="+fileName+";Extended Properties= Excel 8.0;Imex=2;HDR=yes ;"; //for below excel 2007  
+
+                    conn = @"provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + fileName + ";Extended Properties='Excel 8.0;HRD=Yes;IMEX=1';"; //for below excel 2007  
+                else
+                    conn = @"Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + fileName + ";Extended Properties='Excel 12.0;HDR=NO';"; //for above excel 2007  
             using (OleDbConnection con = new OleDbConnection(conn))
             {
                 con.Open();
@@ -214,19 +218,26 @@ namespace Excel_Reader
                         foreach (DataRow row in dt.Rows)
                         {
                             var dttemp = new DataTable();
-                            // excelSheets[i] = row["TABLE_NAME"].ToString();
-                            var name = row["TABLE_NAME"].ToString();
-                            OleDbDataAdapter temp = new OleDbDataAdapter("select * from [" + name + "]", con);
-                            temp.Fill(dttemp);
-                            if (dttemp.Rows.Count != 0 && dttemp.Columns.Count > 12 && dttemp.Rows[0][12].ToString() == "PK")
+                            try
                             {
-                                h++;
-                                dtr.Rows.Add(
-                                    new object[]
-                                    {
+                                //// excelSheets[i] = row["TABLE_NAME"].ToString();
+                                var name = row["TABLE_NAME"].ToString();
+                                OleDbDataAdapter temp = new OleDbDataAdapter("select * from [" + name + "]", con);
+                                temp.Fill(dttemp);
+                                if (dttemp.Rows.Count != 0 && dttemp.Columns.Count > 12 && dttemp.Rows[0][12].ToString() == "PK")
+                                {
+                                    h++;
+                                    dtr.Rows.Add(
+                                        new object[]
+                                        {
                                  h,  dttemp.Rows[3][0].ToString(), name
-                                    }
-                                    );
+                                        }
+                                        );
+                                }
+                            }
+                            catch (Exception eex)
+                            {
+                                var ex = eex.Message;
                             }
                             i++;
                         }
@@ -247,6 +258,43 @@ namespace Excel_Reader
             }
             return ExcelTable(dtexcel);
 
+        }
+        public DataTable READExcel(string path)
+        {
+            Microsoft.Office.Interop.Excel.Application objXL = null;
+            Microsoft.Office.Interop.Excel.Workbook objWB = null;
+            objXL = new Microsoft.Office.Interop.Excel.Application();
+            objWB = objXL.Workbooks.Open(path);
+            dynamic coun1 = objWB.Worksheets;
+
+            Microsoft.Office.Interop.Excel.Worksheet objSHT = objWB.Worksheets[1];
+
+            int rows = objSHT.UsedRange.Rows.Count;
+            int cols = objSHT.UsedRange.Columns.Count;
+            DataTable dt = new DataTable();
+            int noofrow = 1;
+
+            for (int c = 1; c <= cols; c++)
+            {
+                string colname = objSHT.Cells[1, c].Text;
+                dt.Columns.Add(colname);
+                noofrow = 2;
+            }
+
+            for (int r = noofrow; r <= rows; r++)
+            {
+                DataRow dr = dt.NewRow();
+                for (int c = 1; c <= cols; c++)
+                {
+                    dr[c - 1] = objSHT.Cells[r, c].Text;
+                }
+
+                dt.Rows.Add(dr);
+            }
+
+            objWB.Close();
+            objXL.Quit();
+            return dt;
         }
         private DataTable ExcelTable(DataTable dtexcel)
         {
@@ -406,12 +454,20 @@ namespace Excel_Reader
         {
             if (dataGridView1.DataSource == null || dataGridView1.RowCount == 0)
                 return;
-            dtRight.Rows.Add(new object[] {
-            dataGridView1.SelectedRows[0].Cells[0].Value,
-            dataGridView1.SelectedRows[0].Cells[1].Value.ToString().Replace("\n",""),
-            dataGridView1.SelectedRows[0].Cells[2].Value,
+            foreach (DataGridViewRow dr in dataGridView1.Rows)
+            {
+                if (dr.Selected)
+                {
+                    dtRight.Rows.Add(new object[] {
+            //dataGridView1.SelectedRows[0].Cells[0].Value,
+            dr.Cells[0].Value,
+            dr.Cells[1].Value.ToString().Replace("\n",""),
+            dr.Cells[2].Value,
 
             });
+                }
+            }
+        
             DataTable uniqueCols = dtRight.DefaultView.ToTable(true, new string[] { "No", "TableName", "SheetName" });
             var dv = uniqueCols.DefaultView;
             dv.Sort = "No";
@@ -419,6 +475,7 @@ namespace Excel_Reader
             dataGridView2.DataSource = uniqueCols;
             if (!checkBox2.Checked)
                 dataGridView2.Columns[2].Visible = false;
+            dataGridView2.ClearSelection();
         }
 
         private void button5_Click(object sender, EventArgs e)
@@ -430,22 +487,28 @@ namespace Excel_Reader
                 var dv = dtRight.DefaultView;
                 dv.Sort = "No";
                 dtRight = dv.ToTable();
-                string val = dataGridView2.SelectedRows[0].Cells[0].Value.ToString();
-                dtRight = dtRight.DefaultView.ToTable(true, new string[] { "No", "TableName", "SheetName" }); 
-                foreach (DataRow dr in dtRight.Select($"No='{val}'"))
-                    dr.Delete();
-                dtRight.AcceptChanges();
-                //dataGridView2.DataSource = null;
-                dataGridView2.DataSource = dtRight;
 
+                foreach (DataGridViewRow dr in dataGridView2.Rows)
+                {
+                    // string val = dataGridView2.SelectedRows[0].Cells[0].Value.ToString();
+                    if (dr.Selected)
+                    {
+                        string val = dr.Cells[0].Value.ToString();
+                        dtRight = dtRight.DefaultView.ToTable(true, new string[] { "No", "TableName", "SheetName" });
+                        foreach (DataRow dr1 in dtRight.Select($"No='{val}'"))
+                            dr1.Delete();
+                    }
+                }
+
+                dtRight.AcceptChanges(); 
+                dataGridView2.DataSource = dtRight; 
                 if (!checkBox2.Checked)
-                    dataGridView2.Columns[2].Visible = false;
-
-
+                    dataGridView2.Columns[2].Visible = false; 
                 dataGridView2.Columns[0].Visible = false; 
                 dataGridView2.RefreshEdit();
                 dataGridView2.Refresh();
             }
+          
         }
 
         private void button1_Click_1(object sender, EventArgs e)
