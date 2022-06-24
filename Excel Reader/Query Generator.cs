@@ -19,10 +19,7 @@ namespace Excel_Reader
         {
 
             InitializeComponent();
-            dtRight = new DataTable();
-            dtRight.Columns.Add("No");
-            dtRight.Columns.Add("TableName");
-            dtRight.Columns.Add("SheetName");
+       
         }
 
         private void button1_Click(object sender, EventArgs e)
@@ -66,6 +63,7 @@ namespace Excel_Reader
         }
         private void button3_Click(object sender, EventArgs e)
         {
+            error.Visible = false;
             this.Cursor = Cursors.WaitCursor;
             //CheckForIllegalCrossThreadCalls = true;
             //progressBar2.Visible = true;
@@ -87,10 +85,25 @@ namespace Excel_Reader
             {
                 dtRes = resultList;
                 dataGridView1.DataSource = resultList;
+         
+                left_count.Text = "Total-"+ resultList.Rows.Count.ToString();
+                dataGridView1.Columns[0].Visible = false;
                 dataGridView1.Columns[2].Visible = checkBox2.Checked;
                 dataGridView1.RefreshEdit();
                 dataGridView1.Refresh();
-            }
+            } 
+            dtRight = new DataTable();
+            dtRight.Columns.Add("No");
+            dtRight.Columns.Add("TableName");
+            dtRight.Columns.Add("SheetName");
+            dataGridView2.DataSource = dtRight;
+
+
+            colTableName.Width= colTableName.MinimumWidth = 200;
+            colSheetName.Width = colSheetName .MinimumWidth= 200;
+            rcolTableName.Width = 200;
+            rcolSheetName.Width = 200;
+
             this.Cursor = Cursors.Default; ;
             //progressBar2.Visible = false;
         }
@@ -181,8 +194,11 @@ namespace Excel_Reader
         {
             return null;
         }
+        static DataTable ErrorTable;
         public DataTable ReadExcel(string fileName, string fileExt, bool IsList = false, string tbName=null)
         {
+          
+
             //var dtx=READExcel(textBox1.Text);
             string conn = string.Empty;
             DataTable dtexcel = new DataTable();
@@ -197,36 +213,47 @@ namespace Excel_Reader
                 con.Open();
                 try
                 {
-                 
-
-                    //String[] excelSheets = new String[dt.Rows.Count];
-                    int i = 0;
                     DataTable dtr = new DataTable();
-                    dtr.Columns.Add("No");
+                    dtr.Columns.Add("No", typeof(int));
                     dtr.Columns.Add("TableName");
                     dtr.Columns.Add("SheetName");
                     // Add the sheet name to the string array.
 
                     if (IsList)
                     {
-                        DataTable dt = con.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null);
+                        ErrorTable = new DataTable();
+                        ErrorTable.Columns.Add("No");
+                        ErrorTable.Columns.Add("SheetName");
+                        ErrorTable.Columns.Add("ErrorMessage");
+                        Interpo ip = new Interpo();
+
+                        //●ITEMマスタ
+                        DataTable dt = con.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null);//99
                         if (dt == null)
                         {
                             return null;
                         }
+                        var NameSply = ip.getExcelFile2(fileName);//97
+
+
                         int h = 0;
                         foreach (DataRow row in dt.Rows)
                         {
+                            h++;
                             var dttemp = new DataTable();
+                            var name = row["TABLE_NAME"].ToString();
+
+                            if (name == "●汎用マスター$")
+                            {
+
+                            }
                             try
                             {
-                                //// excelSheets[i] = row["TABLE_NAME"].ToString();
-                                var name = row["TABLE_NAME"].ToString();
                                 OleDbDataAdapter temp = new OleDbDataAdapter("select * from [" + name + "]", con);
                                 temp.Fill(dttemp);
-                                if (dttemp.Rows.Count != 0 && dttemp.Columns.Count > 12 && dttemp.Rows[0][12].ToString() == "PK")
+                                if (dttemp.Rows.Count != 0 && dttemp.Columns.Count > 12 && dttemp.Rows[0][12].ToString() == "PK") // Write  read me . . . . 
                                 {
-                                    h++;
+
                                     dtr.Rows.Add(
                                         new object[]
                                         {
@@ -234,14 +261,56 @@ namespace Excel_Reader
                                         }
                                         );
                                 }
+                                else
+                                {
+                                    ErrorTable.Rows.Add(
+                                   new object[]
+                                   {
+                                 h,    name,  "Format Error - No Row Count or Columns Less than 12 or Even pk(primarykey) not exist"
+                                   }
+                                   );
+                                }
                             }
                             catch (Exception eex)
                             {
                                 var ex = eex.Message;
+                                ErrorTable.Rows.Add(
+                             new object[]
+                             {
+                                 h,    name,  "System Error - "+ ex
+                             }
+                             );
                             }
-                            i++;
+
                         }
                         con.Close();
+
+                        // Order DT //.Replace("\n","")
+                        for (int i = 0; i < dtr.Rows.Count; i++)
+                        {
+
+                            var Sheetname = dtr.Rows[i]["SheetName"].ToString().Replace("$", "").Replace("_", "");
+
+                            var value = NameSply.Select($"SheetName='{Sheetname}'");
+                            if (value != null && value.CopyToDataTable().Rows.Count == 1)
+                            {
+
+                                dtr.Rows[i]["No"] = value.CopyToDataTable().Rows[0]["No"].ToString();
+
+                            }
+
+                            //dtRight.Select($"No='{dr.Cells[0].Value}' and TableName ='{dr.Cells[1].Value.ToString().Replace("\n", "")}' ");
+
+                        }
+                        var dv = dtr.DefaultView;
+                        dv.Sort = "No";
+                        dtr = dv.ToTable();
+
+                        if (ErrorTable.Rows.Count > 0)
+                            error.Visible = true;
+                        else
+                            error.Visible = false;
+
                         return dtr;
                     }
                    if (!string.IsNullOrEmpty(tbName))
@@ -452,19 +521,38 @@ namespace Excel_Reader
         DataTable dtRight;
         private void button4_Click(object sender, EventArgs e)
         {
+            dataGridView2.RefreshEdit();
             if (dataGridView1.DataSource == null || dataGridView1.RowCount == 0)
                 return;
             foreach (DataGridViewRow dr in dataGridView1.Rows)
             {
                 if (dr.Selected)
                 {
-                    dtRight.Rows.Add(new object[] {
+                    if (dtRight == null || dtRight.Rows.Count == 0)
+                    {
+                        dtRight.Rows.Add(new object[] {
             //dataGridView1.SelectedRows[0].Cells[0].Value,
             dr.Cells[0].Value,
             dr.Cells[1].Value.ToString().Replace("\n",""),
             dr.Cells[2].Value,
 
             });
+                    }
+                    else
+                    {
+                        var exist = dtRight.Select($"No='{dr.Cells[0].Value}' and TableName ='{dr.Cells[1].Value.ToString().Replace("\n", "")}' ");
+                        if (exist == null || exist.Count() == 0)
+                        {
+
+                            dtRight.Rows.Add(new object[] {
+            //dataGridView1.SelectedRows[0].Cells[0].Value,
+            dr.Cells[0].Value,
+            dr.Cells[1].Value.ToString().Replace("\n",""),
+            dr.Cells[2].Value,
+
+            });
+                        }
+                    }
                 }
             }
         
@@ -473,6 +561,8 @@ namespace Excel_Reader
             dv.Sort = "No";
             uniqueCols = dv.ToTable();
             dataGridView2.DataSource = uniqueCols;
+            right_count.Text = "Total-" + uniqueCols.Rows.Count.ToString();
+            dataGridView2.Columns[0].Visible = false;
             if (!checkBox2.Checked)
                 dataGridView2.Columns[2].Visible = false;
             dataGridView2.ClearSelection();
@@ -501,7 +591,9 @@ namespace Excel_Reader
                 }
 
                 dtRight.AcceptChanges(); 
-                dataGridView2.DataSource = dtRight; 
+                dataGridView2.DataSource = dtRight;
+                right_count.Text = "Total-" + dtRight.Rows.Count.ToString();
+                dataGridView2.Columns[0].Visible = false;
                 if (!checkBox2.Checked)
                     dataGridView2.Columns[2].Visible = false; 
                 dataGridView2.Columns[0].Visible = false; 
@@ -520,7 +612,7 @@ namespace Excel_Reader
         { 
                  
         }
-        static DataTable dtRes = new DataTable();
+          DataTable dtRes = new DataTable();
         private void textBox3_TextChanged(object sender, EventArgs e)
         {  
             var dt =dataGridView1.DataSource as DataTable;
@@ -533,7 +625,7 @@ namespace Excel_Reader
             if (drPaytable != null && drPaytable.Count() > 0 && !string.IsNullOrWhiteSpace(txt))
             {
                 dataGridView1.DataSource = drPaytable.CopyToDataTable();
-
+                left_count.Text = "Total-" + drPaytable.CopyToDataTable().Rows.Count.ToString();
                 dataGridView1.Columns[0].Visible = false;
                 if (!checkBox2.Checked)
                     dataGridView1.Columns[2].Visible = false;
@@ -547,10 +639,12 @@ namespace Excel_Reader
                 dt2.Columns.Add("SheetName");
 
                 dataGridView1.DataSource = dt2;
+                left_count.Text = "Total-" + dt2.Rows.Count.ToString();
             }
             else
             {
                 dataGridView1.DataSource = dtRes;
+                left_count.Text = "Total-"+ dtRes.Rows.Count.ToString();
                 dataGridView1.Columns[0].Visible = false;
                 if (!checkBox2.Checked)
                     dataGridView1.Columns[2].Visible = false;
@@ -588,35 +682,42 @@ namespace Excel_Reader
             {
                 foreach (DataRow dr in dtresult.Rows)
                 {
-                    var dt = ReadExcel(textBox1.Text, ".xls", false, dr[2].ToString());
-                    var tbName = dr[1].ToString();
-                    var query = "";
-                    if (checkBox1.Checked)
-                        query += DropIfExist(tbName) + Environment.NewLine;
-                    query += Commentary(tbName) + Environment.NewLine;
-                    query += SakuseiTable(dt) + Environment.NewLine;
-                    query += SakuseiPK(dt) + Environment.NewLine;
-                    query += SakuseiIndexers(dt) + Environment.NewLine;
-                    query += ExtendedQuery(tbName) + Environment.NewLine;
+                    try
+                    {
+                        var dt = ReadExcel(textBox1.Text, ".xls", false, dr[2].ToString());
+                        if (dt.Rows.Count > 0)
+                        {
+                            var tbName = dr[1].ToString();
+                            var query = "";
+                            if (checkBox1.Checked)
+                                query += DropIfExist(tbName) + Environment.NewLine;
+                            query += Commentary(tbName) + Environment.NewLine;
+                            query += SakuseiTable(dt) + Environment.NewLine;
+                            query += SakuseiPK(dt) + Environment.NewLine;
+                            query += SakuseiIndexers(dt) + Environment.NewLine;
+                            query += ExtendedQuery(tbName) + Environment.NewLine;
 
-                    if (!Directory.Exists(textBox2.Text + "\\Tables"))
-                    {
-                        Directory.CreateDirectory(textBox2.Text + "\\Tables");
+                            if (!Directory.Exists(textBox2.Text + "\\Tables"))
+                            {
+                                Directory.CreateDirectory(textBox2.Text + "\\Tables");
+                            }
+                            // \r\n
+                            query = query.Replace("\r\n\r\n\r\n", "");
+                            if (radioButton1.Checked)
+                            {
+                                File.WriteAllText(textBox2.Text + "\\Tables\\" + tbName + ".sql", query, Encoding.GetEncoding(932));
+                            }
+                            if (radioButton2.Checked)
+                            {
+                                File.WriteAllText(textBox2.Text + "\\Tables\\" + tbName + ".sql", query, Encoding.GetEncoding(51932)); ;
+                            }
+                            if (radioButton3.Checked)
+                            {
+                                File.WriteAllText(textBox2.Text + "\\Tables\\" + tbName.Replace("\n", "") + ".sql", query, Encoding.UTF8);
+                            }
+                        }
                     }
-                    // \r\n
-                    query = query.Replace("\r\n\r\n\r\n", "");
-                    if (radioButton1.Checked)
-                    {
-                        File.WriteAllText(textBox2.Text + "\\Tables\\" + tbName + ".sql", query, Encoding.GetEncoding(932));
-                    }
-                    if (radioButton2.Checked)
-                    {
-                        File.WriteAllText(textBox2.Text + "\\Tables\\" + tbName + ".sql", query, Encoding.GetEncoding(51932)); ;
-                    }
-                    if (radioButton3.Checked)
-                    {
-                        File.WriteAllText(textBox2.Text + "\\Tables\\" + tbName.Replace("\n","") + ".sql", query, Encoding.UTF8);
-                    }
+                    catch { }
                 }
 
                 System.Diagnostics.Process.Start(textBox2.Text + "\\Tables");
@@ -630,7 +731,42 @@ namespace Excel_Reader
         private void Form1_Load(object sender, EventArgs e)
         { 
 
-        } 
-     
+        }
+
+        private void button1_Click_2(object sender, EventArgs e)
+        {
+            dtRes = new DataTable();
+            dtRight = new DataTable();
+            var dt = dataGridView1.DataSource as DataTable;
+            try
+            {
+                dt.Rows.Clear();
+            }
+            catch { }
+            dataGridView1.DataSource = dt;
+            var dt2 = dataGridView2.DataSource as DataTable;
+            try
+            {
+                dt2.Rows.Clear();
+            }
+            catch { }
+            dataGridView2.DataSource = dt2;
+
+            textBox1.Text = "";
+            textBox2.Text = "";
+            checkBox1.Checked = false;
+            checkBox2.Checked = false;
+            left_count.Text = "Total-0";
+            right_count.Text = "Total-0";
+
+         
+
+        }
+
+        private void error_Click(object sender, EventArgs e)
+        {
+            Form2 drm = new Form2(ErrorTable);
+            drm.ShowDialog();
+        }
     }
 }
